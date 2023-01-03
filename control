@@ -1,0 +1,9 @@
+Package: luci-app-qmi-cellstatus
+Version: 1.0.0
+Depends: libc, uqmi
+Source: none
+SourceName: luci-app-qmi-cellstatus
+Section: luci
+Architecture: all
+Installed-Size: 2833
+Description:  Cellular QMI modem WWAN connection information and status

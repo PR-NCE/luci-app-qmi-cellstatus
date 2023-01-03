@@ -1,0 +1,220 @@
+<%#
+
+    LuCI cellular networking status page
+
+      (c) 2020 by Peter Rottengatter
+          peter@rottengatter.de
+      licensed to the public under the GNU General Public License v2
+
+-%>
+
+<%-
+     local qmi_devices
+     qmi_devices = io.popen ("echo /sys/bus/usb/drivers/qmi_wwan/*/usbmisc/*")
+     if qmi_devices then
+          local line
+          local func, state, var = qmi_devices:lines()
+          device = '/dev/' .. string.gsub (func (state, var), '^.*/', '')
+          qmi_devices:close()
+       end
+     if not device then
+-%>
+<%+header%>                                                                    
+<div class="container">
+  <h2><%:Cellular Network Information and Status%></h2>
+  <p style="padding:.5rem">
+    Cellular networking utilizes a cellphone network for internet access.
+  </p>
+  <h3>There seems to be no cellular modem installed.</h2>
+</div>
+<%+footer%>
+<%-
+          os.exit (255)
+       end
+
+     function uqmi_line (command)
+          local uqmi
+          uqmi = io.popen ('uqmi --device=' .. device .. ' ' .. command .. ' 2>/dev/null')
+          if not uqmi then
+               return nil
+            end
+          local func, state, var = uqmi:lines()
+          result = func (state, var)
+          uqmi:close()
+          return strip (result, '"', '"')
+       end
+
+     function strip (string, front, back)
+          return string.gsub (string.gsub (string, '^' .. front, ''), back .. '$', '')
+       end
+
+     imei   = uqmi_line ('--get-imei')
+     iccid  = uqmi_line ('--get-iccid')
+     imsi   = uqmi_line ('--get-imsi')
+     msisdn = uqmi_line ('--get-msisdn')
+
+     local items
+     items = string.split (strip (uqmi_line ('-s --get-capabilities'), '{', '}'), ',')
+     local no
+     no = 1
+     while items[no]
+       do
+          local kv = string.split (items[no], ':')
+          local key = strip (kv[1], '"', '"')
+          if        key == 'max_tx_channel_rate'  then  rate_tx = kv[2]
+             elseif key == 'max_rx_channel_rate'  then  rate_rx = kv[2]
+            end
+          no = no + 1
+       end
+     rate_tx = tostring (tonumber (rate_tx) / 1000000) .. ' Mbps'
+     rate_rx = tostring (tonumber (rate_rx) / 1000000) .. ' Mbps'
+
+-- find out available frequency bands
+  bands='2100, 1900, 1800, 1700, 850, 2600, 900, 800'
+
+     if uqmi_line ('--get-data-status') == 'connected' then
+          connection = true
+          local signal
+          signal = uqmi_line ('-s --get-signal-info')
+          if not (signal == '"Information unavailable"') then
+               local items
+               items = string.split (strip (signal, '{', '}'), ',')
+               local no
+               no = 1
+               while items[no]
+                 do
+                    local kv = string.split (items[no], ':')
+                    local key = strip (kv[1], '"', '"')
+                    if        key == 'type'    then  type = strip (kv[2], '"', '"')
+                       elseif key == 'rssi'    then  rssi = kv[2]
+                       elseif key == 'rsrp'    then  rsrp = kv[2]
+                       elseif key == 'rsrq'    then  rsrq = kv[2]
+                       elseif key == 'snr'     then  snr  = kv[2]
+                       elseif key == 'signal'  then  rssi = kv[2]
+                       elseif key == 'ecio'    then  ecio = kv[2]
+                      end
+                    no = no + 1
+                 end
+               if type == 'cdma' or type == 'wcdma' or type == 'tdscdma' or type == 'evdo' or type == 'cdma-evdo' then
+                    type = 'umts'
+                 end
+-- find out frequency being used
+  frequency=1800
+               type = string.upper (type)
+             else
+               type = 'Unknown'
+            end
+        else
+          connection = false
+       end
+
+     function text_line (split, label, comment, value)
+          local dummy = ''
+          if comment then
+               comment = ' <br> <font size="-2"> ' .. comment .. ' </font> &nbsp;'
+               dummy = ' <br> <font size="-2"> &nbsp; </font>'
+             else
+               comment = ''
+            end
+          print ('          <div class="tr">')
+          print ('            <div class="td right" width="' .. split .. '%"> ' .. label .. ' :' .. comment .. ' </div>')
+          print ('            <div class="td left"> ' .. value .. dummy .. ' </div>')
+          print ('          </div>')
+       end
+
+     function bar_line (lbl_main, lbl_sub1, lbl_sub2, value, unit, low, high)
+          if tonumber (value) < low then
+               value = low
+            end
+          if tonumber (value) > high then
+               value = high
+            end
+          print ('          <div class="tr">')
+          print ('            <div class="td right" width="33%">')
+          print ('              ' .. lbl_main .. ' : <br> <font size="-2"> ' .. lbl_sub1 .. ' &nbsp; <br> ' .. lbl_sub2 .. ' &nbsp; </font>')
+          print ('            </div>')
+          print ('            <div class="td">')
+          print ('              <div class="cbi-progressbar" title="' .. value .. unit .. '">')
+          print ('                <div style="width:' .. (value - low) * 100 / (high - low) .. '%"> </div>')
+          print ('              </div>')
+          print ('              <font size="-2"> <div style="float:left"> ' .. low .. unit .. ' </div> <div style="float:right"> ' .. high .. unit .. ' </div> </font>')
+          print ('            </div>')
+          print ('          </div>')
+       end
+-%>
+
+<%+header%>                                                                    
+
+<div class="container">
+  <h2><%:Cellular Network Information and Status%></h2>
+  <p style="padding:.5rem">
+    Cellular networking utilizes a cellphone network for internet access.
+  </p>
+  <div id="view">
+    <div class="cbi-section fade-in" style>
+      <h3>Local Information</h3>
+      <div>
+        <div class="table">
+<%-
+     text_line (55, 'International mobile equipment identity (IMEI)', '(Cellular MODEM identity)', imei)
+     text_line (55, 'Maximum data transmission speed', 'Downlink / Uplink', rate_rx .. ' / ' .. rate_tx)
+--     text_line (55, 'Frequency bands supported by radio', '[MHz]', bands)
+     text_line (55, 'Integrated circuit card identifier (ICCID)', '(SIM card identity)', iccid)
+     text_line (55, 'International mobile subscriber identity (IMSI)', '(Service provider account)', imsi)
+     text_line (55, 'Mobile station international subscriber directory number (MSISDN)', '("Telephone number")', '+' .. msisdn)
+-%>
+        </div>
+      </div>
+    </div>
+  </div>
+<%-
+     if connection then
+          local tag=''
+--          print ('  <div id="view">')
+--          print ('    <div class="cbi-section fade-in" style>')
+--          print ('      <h3>Cellular Network Information</h3>')
+--          print ('      <div>')
+--          print ('        <div class="table">')
+--          text_line (55, 'Network carrier', nil, 'Telekom Deutschland')
+--          print ('        </div>')
+--          print ('      </div>')
+--          print ('    </div>')
+--          print ('  </div>')
+          print ('  <div id="view">')
+          print ('    <div class="cbi-section fade-in" style>')
+          print ('      <h3>Current Connection Status</h3>')
+          print ('      <div>')
+          print ('        <div class="table">')
+          text_line (33, 'Type of cellular connection', nil, type)
+          if type == 'LTE' then
+               text_line (33, 'Resource blocks', '(estimated)', math.floor (10 ^ ((rssi - rsrp) / 10) / 12))
+               tag = '(all resource blocks)'
+            end
+          if type ~= 'unknown' then
+--               text_line (33, 'Frequency band', nil, frequency .. ' MHz')
+               bar_line ('Received signal strength indicator (RSSI)', 'full bandwidth', tag,
+                         rssi, ' dbm', -100, -50)
+            end
+          if type == 'LTE' then
+               bar_line ('Reference signal received power (RSRP)', '15 kHz', '(single sub-carrier)',
+                         rsrp, ' dbm', -140, -44)
+               bar_line ('Reference signal received quality (RSRQ)', '(reference quality)', '',
+                         rsrq, ' dB', -30, 0)
+               bar_line ('Signal to Interference &amp; Noise Ratio (SINR)', '(interference indicator)', '',
+                         snr, ' dB', 0, 30)
+            end
+          if type == 'UMTS' then
+               bar_line ('Downlink carrier-to-interference ratio (EC/IO)', '(signal quality)', '',
+                         0 - ecio, ' dB', -30, 0)
+            end
+          print ('        </div>')
+          print ('      </div>')
+          print ('    </div>')
+          print ('  </div>')
+          print ('</div>')
+        else
+          print ('  <h3>Disconnected: No network connection has been made.</h2>')
+       end
+-%>
+
+<%+footer%>
