@@ -75,6 +75,9 @@
      if uqmi_line ('--get-data-status') == 'connected' then
           connection = true
           cells = uqmi_line ('-s --get-cell-location-info')     
+          cells = cells:gsub("%,", "<br />")
+          cells = cells:gsub("{", "<ul>")
+          cells = cells:gsub("}", "</ul>")
           local signal
           signal = uqmi_line ('-s --get-signal-info')
           if not (signal == '"Information unavailable"') then
@@ -216,11 +219,13 @@
           print ('    <div class="cbi-section fade-in" style>')
           print ('      <h3>Current Cell Location Information</h3>')
           print ('      <div>')
-          print ('        <p>')
-          print ('<p> ------------- </p>')
+          print ('        <div class="table">')
+          print ('          <div class="tr">')
+          print ('            <div class="td left">')
           print (cells)
-          print ('<p> ------------- </p>')
-          print ('        </p>')
+          print ('            </div>')
+          print ('          </div>')
+          print ('        </div>')
           print ('      </div>')
           print ('    </div>')
           print ('  </div>')
