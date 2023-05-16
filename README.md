@@ -3,7 +3,7 @@ An OpenWrt luci app that adds a Cellular Status page for wireless modems with QM
 
 If you have an LTE or UMTS modem that runs via the QMI driver on OpenWrt, feel free to install this app and test it.
 
-Just download the luci-app-qmi-cellstatus_1.0.0_all.ipk from the Releases section, under assets; then upload it to your OpenWRT using the web user interface by navigating to:
+Just download the luci-app-qmi-cellstatus_1.1.0_all.ipk from the Releases section, under assets; then upload it to your OpenWRT using the web user interface by navigating to:
 
 System > Software > Upload Package ...
 
